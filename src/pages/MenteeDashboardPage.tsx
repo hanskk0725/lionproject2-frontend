@@ -358,7 +358,7 @@ export default function MenteeDashboardPage() {
                               tutorialId: course.tutorialId,
                               tutorialTitle: course.tutorialTitle,
                               mentorNickname: course.mentorNickname,
-                              reviewId: course.review.id,
+                              reviewId: course.review?.id,
                               isEdit: true,
                             })}
                             className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-medium hover:bg-slate-700 transition-colors"
