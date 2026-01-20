@@ -30,7 +30,12 @@ export default function PaymentPage() {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/payments/config`);
+        const token = localStorage.getItem('accessToken');
+        const res = await fetch(`${API_BASE_URL}/api/payments/config`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
         if (!res.ok) {
           throw new Error(`config load failed: ${res.status}`);
         }
