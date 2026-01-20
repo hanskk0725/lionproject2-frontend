@@ -123,11 +123,14 @@ export default function MenteeDashboardPage() {
       const hasOngoing = ticketLessons.some(l => ['CONFIRMED', 'SCHEDULED', 'IN_PROGRESS'].includes(l.status));
       const hasWaiting = ticketLessons.some(l => l.status === 'REQUESTED');
 
-      // 환불된 티켓: 레슨이 없고 expired가 true이면 사용불가
-      const isUnavailable = ticketLessons.length === 0 && ticket.expired;
+      // 환불된 티켓: 레슨이 없고 카운트가 다 차고(remainingCount === 0) 만기일이 지났으면 사용불가
+      // 레슨이 없고 카운트가 다 찬 경우는 환불된 티켓일 가능성이 높으므로 사용불가로 처리
+      const isUnavailable = ticketLessons.length === 0 && ticket.remainingCount === 0 && ticket.expired;
+      // 레슨이 없고 카운트가 다 찬 경우도 사용불가 (환불된 티켓)
+      const isRefunded = ticketLessons.length === 0 && ticket.remainingCount === 0;
 
       let status: 'ongoing' | 'waiting' | 'completed' | 'unavailable' = 'completed';
-      if (isUnavailable) status = 'unavailable';
+      if (isUnavailable || isRefunded) status = 'unavailable';
       else if (hasOngoing) status = 'ongoing';
       else if (hasWaiting) status = 'waiting';
       else if (ticket.remainingCount > 0 && completedCount > 0) status = 'ongoing';

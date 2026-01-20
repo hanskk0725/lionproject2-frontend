@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import * as qnaApi from '@/api/qna';
+import * as lessonApi from '@/api/lesson';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function QuestionCreatePage() {
-  const [tags, setTags] = useState<string[]>(['react', 'hooks']);
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [lessonId, setLessonId] = useState<number | ''>('');
+  const [lessons, setLessons] = useState<lessonApi.Lesson[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -23,6 +33,59 @@ export default function QuestionCreatePage() {
 
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter((tag) => tag !== tagToRemove));
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    // 멘티의 수업 목록 가져오기 (질문 가능한 수업: 확정, 예정, 완료)
+    const fetchLessons = async () => {
+      try {
+        const res = await lessonApi.getMyLessons();
+        if (res.success && res.data) {
+          // 질문 가능한 상태의 수업만 필터링 (CONFIRMED, SCHEDULED, COMPLETED)
+          const availableLessons = res.data.lessons.filter(
+            lesson => ['CONFIRMED', 'SCHEDULED', 'COMPLETED'].includes(lesson.status)
+          );
+          setLessons(availableLessons);
+        }
+      } catch (error) {
+        console.error('수업 목록 조회 실패:', error);
+      }
+    };
+    fetchLessons();
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async () => {
+    if (!title.trim() || !content.trim()) {
+      alert('제목과 내용을 입력해주세요.');
+      return;
+    }
+    if (!lessonId) {
+      alert('수업을 선택해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await qnaApi.createQuestion(Number(lessonId), {
+        title: title.trim(),
+        content: content.trim(),
+      });
+      if (res.success) {
+        alert('질문이 등록되었습니다.');
+        navigate('/qna');
+      } else {
+        alert('질문 등록에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('질문 등록 실패:', error);
+      alert('질문 등록에 실패했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -40,13 +103,35 @@ export default function QuestionCreatePage() {
 
             <Card>
               <CardContent className="p-8 space-y-8">
+                {/* Lesson Selection */}
+                <div className="space-y-2">
+                  <Label className="text-base font-semibold">수업 선택 *</Label>
+                  <p className="text-muted-foreground text-xs">
+                    질문할 수업을 선택해주세요.
+                  </p>
+                  <select
+                    value={lessonId}
+                    onChange={(e) => setLessonId(e.target.value ? Number(e.target.value) : '')}
+                    className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">수업을 선택하세요</option>
+                    {lessons.map((lesson) => (
+                      <option key={lesson.lessonId} value={lesson.lessonId}>
+                        {lesson.tutorialTitle} - {lesson.mentorName} 멘토
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Title */}
                 <div className="space-y-2">
-                  <Label className="text-base font-semibold">제목</Label>
+                  <Label className="text-base font-semibold">제목 *</Label>
                   <p className="text-muted-foreground text-xs">
                     다른 사람에게 질문한다고 생각하고 구체적으로 작성해 주세요.
                   </p>
                   <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
                     placeholder="예: React useEffect에서 레이스 컨디션을 처리하는 방법은 무엇인가요?"
                     className="h-12"
                   />
@@ -85,6 +170,8 @@ export default function QuestionCreatePage() {
                       </Button>
                     </div>
                     <Textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
                       placeholder="문제의 문맥과 시도해본 내용을 설명해 주세요..."
                       className="min-h-[256px] border-0 rounded-none focus-visible:ring-0 resize-none"
                     />
@@ -122,12 +209,20 @@ export default function QuestionCreatePage() {
                 {/* Actions */}
                 <div className="flex items-center justify-between pt-6 border-t">
                   <div className="flex items-center gap-4">
-                    <Button className="shadow-lg shadow-primary/20">질문 등록</Button>
-                    <Button variant="ghost">임시 저장</Button>
+                    <Button 
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className="shadow-lg shadow-primary/20"
+                    >
+                      {isSubmitting ? '등록 중...' : '질문 등록'}
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      onClick={() => navigate('/qna')}
+                    >
+                      취소
+                    </Button>
                   </div>
-                  <Button variant="ghost" className="text-destructive hover:text-destructive">
-                    삭제
-                  </Button>
                 </div>
               </CardContent>
             </Card>

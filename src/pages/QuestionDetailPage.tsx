@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import * as qnaApi from '@/api/qna';
 import type { QuestionDetail, Answer } from '@/api/qna';
+import { useAuth } from '@/contexts/AuthContext';
 
 function formatDate(dateString: string): string {
     const date = new Date(dateString);
@@ -22,11 +23,14 @@ function formatDate(dateString: string): string {
 
 export default function QuestionDetailPage() {
     const { questionId } = useParams<{ questionId: string }>();
+    const { user } = useAuth();
 
     const [question, setQuestion] = useState<QuestionDetail | null>(null);
     const [answers, setAnswers] = useState<Answer[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [answerContent, setAnswerContent] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // API 호출
     useEffect(() => {
@@ -54,6 +58,43 @@ export default function QuestionDetailPage() {
 
         fetchQuestion();
     }, [questionId]);
+
+    const handleSubmitAnswer = async () => {
+        if (!questionId || !answerContent.trim()) {
+            alert('답변 내용을 입력해주세요.');
+            return;
+        }
+
+        if (user?.role !== 'MENTOR') {
+            alert('멘토만 답변을 작성할 수 있습니다.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const res = await qnaApi.createAnswer(Number(questionId), {
+                content: answerContent.trim(),
+            });
+            if (res.success) {
+                setAnswerContent('');
+                // 질문 다시 불러오기
+                const questionRes = await qnaApi.getQuestion(Number(questionId));
+                if (questionRes.success && questionRes.data) {
+                    setQuestion(questionRes.data);
+                    setAnswers(questionRes.data.answers || []);
+                } else {
+                    alert('질문을 다시 불러오는데 실패했습니다.');
+                }
+            } else {
+                alert('답변 등록에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('답변 등록 실패:', error);
+            alert('답변 등록에 실패했습니다.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -239,6 +280,8 @@ export default function QuestionDetailPage() {
                             </div>
 
                             <Textarea
+                                value={answerContent}
+                                onChange={(e) => setAnswerContent(e.target.value)}
                                 placeholder="해결 방법, 코드 예시, 그리고 주의할 점을 상세히 작성해주세요..."
                                 className="min-h-[300px] border-0 rounded-none focus-visible:ring-0 resize-none"
                             />
@@ -250,8 +293,19 @@ export default function QuestionDetailPage() {
                                     파일 첨부
                                 </Button>
                                 <div className="flex gap-3">
-                                    <Button variant="secondary">임시 저장</Button>
-                                    <Button className="shadow-lg shadow-primary/20">답변 등록하기</Button>
+                                    <Button 
+                                        variant="secondary"
+                                        onClick={() => setAnswerContent('')}
+                                    >
+                                        취소
+                                    </Button>
+                                    <Button 
+                                        onClick={handleSubmitAnswer}
+                                        disabled={isSubmitting || !answerContent.trim()}
+                                        className="shadow-lg shadow-primary/20"
+                                    >
+                                        {isSubmitting ? '등록 중...' : '답변 등록하기'}
+                                    </Button>
                                 </div>
                             </div>
                         </CardContent>
